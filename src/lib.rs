@@ -36,6 +36,7 @@ mod binding;
 mod context;
 pub use context::ContextOptions;
 pub mod cppgc;
+mod cpu_profiler;
 mod data;
 mod date;
 mod exception;
@@ -95,6 +96,9 @@ pub mod simdutf;
 pub mod V8;
 
 pub use array_buffer::*;
+pub use cpu_profiler::{
+  CpuTraceProfile, CpuTraceProfiler, CpuTraceProfilerStopError,
+};
 pub use data::*;
 pub use exception::*;
 pub use external_references::ExternalReference;
@@ -108,6 +112,8 @@ pub use handle::Local;
 pub use handle::SealedLocal;
 pub use handle::TracedReference;
 pub use handle::Weak;
+pub use isolate::AccessType;
+pub use isolate::FailedAccessCheckCallback;
 pub use isolate::GarbageCollectionType;
 pub use isolate::HeapCodeStatistics;
 pub use isolate::HeapSpaceStatistics;
@@ -162,6 +168,7 @@ pub use property_filter::*;
 pub use property_handler_flags::*;
 pub use regexp::RegExpCreationFlags;
 pub use scope::AllowJavascriptExecutionScope;
+pub use scope::BackupIncumbentScope;
 // pub use scope::CallbackScope;
 pub use scope::CallbackScope;
 pub use scope::ContextScope;
@@ -201,6 +208,7 @@ pub use value_serializer::ValueSerializerHelper;
 pub use value_serializer::ValueSerializerImpl;
 pub use wasm::CompiledWasmModule;
 pub use wasm::ModuleCachingInterface;
+pub use wasm::WasmCompileOptions;
 pub use wasm::WasmModuleCompilation;
 pub use wasm::WasmStreaming;
 
