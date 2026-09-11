@@ -17,8 +17,13 @@ apt-get install -y --no-install-recommends clang-21 lld-21 libclang-21-dev
 curl -fsSL https://sh.rustup.rs -o /tmp/rustup.sh
 sh /tmp/rustup.sh -y --profile minimal --default-host "${TARGET%-*}-gnu" --default-toolchain none
 export PATH="/root/.cargo/bin:/usr/lib/llvm-21/bin:$PATH"
-export CLANG_BASE_PATH=/usr/lib/llvm-21
 export LIBCLANG_PATH=/usr/lib/llvm-21/lib
+export RUSTY_V8_BINDGEN_RESOURCE_DIR=$(/usr/lib/llvm-21/bin/clang -print-resource-dir)
+# Chromium's Rust toolchain expects its matching compiler-rt directory
+# layout. Distro Clang's resource tree is not interchangeable with it.
+export CLANG_BASE_PATH=/work/target/moli-clang
+python3 tools/clang/scripts/update.py --output-dir "$CLANG_BASE_PATH"
+export PATH="$CLANG_BASE_PATH/bin:$PATH"
 export RUSTUP_TOOLCHAIN=1.91.0
 export CARGO_BUILD_JOBS=2
 git config --global --add safe.directory /work
@@ -59,7 +64,7 @@ else
 fi
 export BINDGEN_EXTRA_CLANG_ARGS="$CXXFLAGS"
 export V8_FROM_SOURCE=1 RUSTY_V8_MOLI_LIBSTDCXX=1
-export GN_ARGS='use_custom_libcxx_for_host=false'
+export GN_ARGS='use_custom_libcxx_for_host=false use_glib=false'
 git submodule status --recursive > git_submodule_status.txt
 cargo build --locked --release --no-default-features --lib --target "$TARGET"
 
