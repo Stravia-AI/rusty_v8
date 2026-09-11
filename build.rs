@@ -652,6 +652,25 @@ fn build_v8(is_asan: bool) {
       }
     ));
     gn_args.push("use_sysroot=false".to_string());
+    // The SDK's fixed native nightly includes both host and target stdlibs.
+    // Keep Chromium's default compiler/archive policy outside this variant.
+    let rust_sysroot = env::current_dir()
+      .unwrap()
+      .join("third_party/rust-toolchain");
+    let rust_version = Command::new(rust_sysroot.join("bin/rustc"))
+      .arg("-V")
+      .output()
+      .expect("SDK Rust compiler must run natively");
+    assert!(rust_version.status.success());
+    let rust_version = String::from_utf8(rust_version.stdout).unwrap();
+    gn_args.push(format!("rust_sysroot_absolute={rust_sysroot:?}"));
+    gn_args.push(format!("rustc_version={:?}", rust_version.trim()));
+    // The native nightly and Clang need not share LLVM IR. Rust contributes
+    // machine code rather than participating in cross-language ThinLTO.
+    gn_args.push("toolchain_supports_rust_thin_lto=false".to_string());
+    gn_args.push(
+      "added_rust_stdlib_libs=[\"panic_unwind\",\"rustc_literal_escaper\",\"sysroot\"]".to_string(),
+    );
     gn_args
       .push("custom_toolchain=\"//tools/moli_libstdcxx:target\"".to_string());
     gn_args.push("host_toolchain=\"//tools/moli_libstdcxx:host\"".to_string());
@@ -699,9 +718,11 @@ fn build_v8(is_asan: bool) {
     // V8-as-a-library has no glib dependency; skip it so a musl target_sysroot
     // doesn't send pkg-config looking for glib inside the sysroot.
     gn_args.push("use_glib=false".to_string());
-    // Build libstd + V8's internal Rust crates from source for the musl triple;
-    // V8's vendored Rust toolchain only ships a glibc host std.
-    gn_args.push("rust_prebuilt_stdlib=false".to_string());
+    // Chromium's default package only ships glibc std; the SDK's native
+    // nightly also installs the genuine, same-revision musl target std.
+    if !moli_libstdcxx {
+      gn_args.push("rust_prebuilt_stdlib=false".to_string());
+    }
     // Some V8 sources have glibc-only code paths (e.g. execinfo-based
     // backtraces in stack_trace_posix.cc) whose helpers are unused on musl,
     // tripping -Werror,-Wunused-const-variable. Like the iOS/Android cross
