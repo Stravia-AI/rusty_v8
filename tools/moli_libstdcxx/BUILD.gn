@@ -1,0 +1,27 @@
+# SDK-only libstdc++ toolchains. The upstream clang_toolchain template owns
+# compiler, archiver, Rust and generator integration.
+import("//build/toolchain/gcc_toolchain.gni")
+
+clang_toolchain("target") {
+  extra_cxxflags = getenv("MOLI_TARGET_CXXFLAGS")
+  extra_ldflags = getenv("MOLI_TARGET_LDFLAGS")
+  toolchain_args = {
+    current_cpu = target_cpu
+    current_os = "linux"
+    use_custom_libcxx = false
+    use_sysroot = false
+  }
+}
+
+clang_toolchain("host") {
+  extra_cxxflags = getenv("MOLI_HOST_CXXFLAGS")
+  extra_ldflags = "-static-libstdc++ -static-libgcc"
+  toolchain_args = {
+    current_cpu = host_cpu
+    current_os = "linux"
+    use_custom_libcxx = false
+    use_musl = false
+    use_sysroot = false
+    rust_prebuilt_stdlib = true
+  }
+}

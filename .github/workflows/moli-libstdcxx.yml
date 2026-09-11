@@ -1,0 +1,83 @@
+name: Moli SDK libstdc++ V8
+
+on:
+  push:
+    branches: [sdk-native/v152.2.0-libstdcxx-1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  produce:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Reserve native build memory
+        run: |
+          set -euo pipefail
+          swapfile="$RUNNER_TEMP/moli-v8.swap"
+          sudo fallocate -l 8G "$swapfile"
+          sudo chmod 600 "$swapfile"
+          sudo mkswap "$swapfile"
+          sudo swapon "$swapfile"
+          free -h
+      - name: Assemble native Alpine 3.23 target sysroot
+        if: endsWith(matrix.target, '-musl')
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euxo pipefail
+          docker pull alpine:3.23
+          docker run --name moli-alpine alpine:3.23 sh -ec 'apk add --no-cache g++ linux-headers libstdc++-dev; apk info -v > /moli-apk-packages.txt'
+          mkdir -p target-sysroot
+          docker export moli-alpine | tar -x -C target-sysroot
+          docker image inspect alpine:3.23 > alpine-image.json
+          docker rm moli-alpine
+      - name: Produce on native Debian 12
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euxo pipefail
+          docker pull debian:12
+          docker image inspect debian:12 > debian-image.json
+          docker run --rm -v "$PWD:/work" -w /work \
+            -e TARGET -e GITHUB_SHA -e GITHUB_RUN_ID -e GITHUB_RUN_ATTEMPT \
+            debian:12 bash tools/moli_libstdcxx/produce.sh
+      - name: Verify in native target distribution
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euxo pipefail
+          image=debian:12
+          if [[ "$TARGET" == *-musl ]]; then image=alpine:3.23; fi
+          docker run --rm -v "$PWD:/work" -w /work -e TARGET \
+            "$image" sh tools/moli_libstdcxx/verify.sh
+      - name: Record native build resource failure
+        if: failure()
+        run: |
+          free -h
+          df -h
+          sudo journalctl --dmesg --no-pager
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moli-libstdcxx-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

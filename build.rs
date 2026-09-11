@@ -79,6 +79,7 @@ fn main() {
     "RUSTY_V8_MIRROR_TAG",
     "RUSTY_V8_MIRROR_FALLBACK",
     "RUSTY_V8_MUSL_SYSROOT",
+    "RUSTY_V8_MOLI_LIBSTDCXX",
     "RUSTY_V8_SKIP_DOWNLOAD",
     "RUSTY_V8_SRC_BINDING_PATH",
     "RUSTY_V8_SRC_BINDING_URL",
@@ -247,6 +248,7 @@ fn build_binding() {
     .arg(build_dir().join("gn_out"))
     .output()
     .unwrap();
+  assert!(output.status.success(), "could not read GN binding ABI");
   let args = String::from_utf8(output.stdout).unwrap();
   let args = args.split('\0').collect::<Vec<_>>();
 
@@ -273,13 +275,17 @@ fn build_binding() {
     "-x".to_string(),
     "c++".to_string(),
     "-std=c++20".to_string(),
-    "-nostdinc++".to_string(),
     "-Iv8/include".to_string(),
     "-I.".to_string(),
-    "-isystembuildtools/third_party/libc++".to_string(),
-    "-isystemthird_party/libc++/src/include".to_string(),
-    "-isystemthird_party/libc++abi/src/include".to_string(),
   ];
+  if env::var_os("CARGO_FEATURE_USE_CUSTOM_LIBCXX").is_some() {
+    clang_args.extend([
+      "-nostdinc++".to_string(),
+      "-isystembuildtools/third_party/libc++".to_string(),
+      "-isystemthird_party/libc++/src/include".to_string(),
+      "-isystemthird_party/libc++abi/src/include".to_string(),
+    ]);
+  }
 
   let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
   if target_os == "macos" {
@@ -434,6 +440,29 @@ fn build_moli_v8_ext(sources: &[PathBuf]) {
   let compiler = build.get_compiler();
   if compiler.is_like_msvc() && !compiler.is_like_clang_cl() {
     build.flag("/Zc:__cplusplus");
+  }
+  if env_bool("V8_FROM_SOURCE") {
+    // Full-source WASM bridges include V8 internals and generated Torque
+    // headers, so inherit the native binding target's feature definitions.
+    let gn_out = build_dir().join("gn_out");
+    let output = Command::new(python())
+      .arg("./tools/get_bindgen_args.py")
+      .arg("--gn-out")
+      .arg(&gn_out)
+      .arg("--moli-ext")
+      .output()
+      .unwrap();
+    assert!(output.status.success(), "could not read GN extension ABI");
+    for flag in String::from_utf8(output.stdout).unwrap().split('\0') {
+      if !flag.is_empty() {
+        build.flag(flag);
+      }
+    }
+    build.std("c++23").include("v8");
+    for dir in ["gen", "gen/v8", "gen/v8/include"] {
+      build.include(gn_out.join(dir));
+    }
+    build.flag_if_supported("-fno-rtti");
   }
   for source in sources {
     build.file(source);
@@ -601,8 +630,37 @@ fn build_v8(is_asan: bool) {
   {
     gn_args.push("v8_monolithic_for_shared_library=true".to_string());
   }
+  // The SDK producer uses same-architecture Debian hosts and explicit target
+  // and host toolchains; never download or select Chromium's newer sysroots.
+  let moli_libstdcxx = env_bool("RUSTY_V8_MOLI_LIBSTDCXX");
+  if moli_libstdcxx {
+    assert_eq!(target_os, "linux");
+    assert!(env::var_os("CARGO_FEATURE_USE_CUSTOM_LIBCXX").is_none());
+    assert!(
+      env::var_os("CARGO_FEATURE_V8_ENABLE_POINTER_COMPRESSION").is_none()
+    );
+    assert!(env::var_os("CARGO_FEATURE_V8_ENABLE_SANDBOX").is_none());
+    assert!(!is_debug());
+    let host = env::var("HOST").unwrap();
+    assert!(host.starts_with(&format!("{target_arch}-")));
+    gn_args.push(format!(
+      "target_cpu=\"{}\"",
+      if target_arch == "aarch64" {
+        "arm64"
+      } else {
+        "x64"
+      }
+    ));
+    gn_args.push("use_sysroot=false".to_string());
+    gn_args
+      .push("custom_toolchain=\"//tools/moli_libstdcxx:target\"".to_string());
+    gn_args.push("host_toolchain=\"//tools/moli_libstdcxx:host\"".to_string());
+    gn_args.push(
+      "v8_snapshot_toolchain=\"//tools/moli_libstdcxx:host\"".to_string(),
+    );
+  }
   // cross-compilation setup
-  if target_arch == "aarch64" {
+  if target_arch == "aarch64" && !moli_libstdcxx {
     gn_args.push(r#"target_cpu="arm64""#.to_string());
     if target_os == "linux" {
       gn_args.push("use_sysroot=true".to_string());
@@ -651,6 +709,7 @@ fn build_v8(is_asan: bool) {
     gn_args.push("treat_warnings_as_errors=false".to_string());
 
     match target_arch.as_str() {
+      "x86_64" | "aarch64" if moli_libstdcxx => {}
       "x86_64" => {
         // Host cpu == target cpu, so V8 would build the executable build tools
         // with the (musl) default toolchain. Force the host and snapshot
