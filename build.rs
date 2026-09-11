@@ -658,13 +658,19 @@ fn build_v8(is_asan: bool) {
       .unwrap()
       .join("third_party/rust-toolchain");
     let rust_version = Command::new(rust_sysroot.join("bin/rustc"))
-      .arg("-V")
+      .arg("-vV")
       .output()
       .expect("SDK Rust compiler must run natively");
     assert!(rust_version.status.success());
     let rust_version = String::from_utf8(rust_version.stdout).unwrap();
+    // GN embeds this identity in Rust response-file flags; the human-readable
+    // version banner contains spaces that become extra input filenames.
+    let rust_revision = rust_version
+      .lines()
+      .find_map(|line| line.strip_prefix("commit-hash: "))
+      .expect("SDK Rust compiler must report its commit identity");
     gn_args.push(format!("rust_sysroot_absolute={rust_sysroot:?}"));
-    gn_args.push(format!("rustc_version={:?}", rust_version.trim()));
+    gn_args.push(format!("rustc_version={rust_revision:?}"));
     // The native nightly and Clang need not share LLVM IR. Rust contributes
     // machine code rather than participating in cross-language ThinLTO.
     gn_args.push("toolchain_supports_rust_thin_lto=false".to_string());
