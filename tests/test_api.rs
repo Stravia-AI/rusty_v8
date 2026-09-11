@@ -7238,7 +7238,13 @@ fn inspector_dispatch_protocol_message() {
   let name = b"";
   let name_view = StringView::from(&name[..]);
   let aux_data = StringView::from(&name[..]);
-  inspector.context_created(context, 1, name_view, aux_data);
+  inspector.context_created(
+    context,
+    1,
+    name_view,
+    StringView::empty(),
+    aux_data,
+  );
 
   let counter = ChannelCounter::new();
   let state = b"{}";
@@ -7277,7 +7283,7 @@ fn inspector_release_object_group() {
   let _scope = &mut v8::ContextScope::new(scope, context);
 
   let name = StringView::from(&b""[..]);
-  inspector.context_created(context, 1, name, name);
+  inspector.context_created(context, 1, name, StringView::empty(), name);
 
   let channel = ChannelCounter::new();
   let session = inspector.connect(
@@ -7353,7 +7359,7 @@ fn inspector_wrap_object() {
   );
 
   let name = StringView::from(&b""[..]);
-  inspector.context_created(context, 1, name, name);
+  inspector.context_created(context, 1, name, StringView::empty(), name);
 
   let remote_object = session
     .wrap_object(
@@ -7424,7 +7430,7 @@ fn inspector_unwrap_object() {
   let scope = &mut v8::ContextScope::new(scope, context);
 
   let name = StringView::from(&b""[..]);
-  inspector.context_created(context, 1, name, name);
+  inspector.context_created(context, 1, name, StringView::empty(), name);
 
   let session = inspector.connect(
     1,
@@ -7539,7 +7545,13 @@ fn inspector_value_subtype() {
 
   let name_view = StringView::from(&b""[..]);
   let aux_data_view = StringView::from(&b"{\"isDefault\": true}"[..]);
-  inspector.context_created(context, 1, name_view, aux_data_view);
+  inspector.context_created(
+    context,
+    1,
+    name_view,
+    StringView::empty(),
+    aux_data_view,
+  );
 
   let channel = ChannelCounter::new();
   let session = inspector.connect(
@@ -7592,7 +7604,7 @@ fn inspector_inspected_object_round_trip() {
 
   let name = StringView::from(&b""[..]);
   let aux_data = StringView::from(&b"{\"isDefault\": true}"[..]);
-  inspector.context_created(context, 1, name, aux_data);
+  inspector.context_created(context, 1, name, StringView::empty(), aux_data);
 
   let channel = ChannelCounter::new();
   let session = inspector.connect(
@@ -7660,7 +7672,7 @@ fn inspector_inspected_object_drops_rust_impl_when_evicted() {
   let scope = &mut v8::ContextScope::new(scope, context);
 
   let name = StringView::from(&b""[..]);
-  inspector.context_created(context, 1, name, name);
+  inspector.context_created(context, 1, name, StringView::empty(), name);
 
   let session = inspector.connect(
     1,
@@ -7708,7 +7720,13 @@ fn inspector_exception_thrown() {
   let name_view = StringView::from(&name[..]);
   let aux_data = b"";
   let aux_data_view = StringView::from(&aux_data[..]);
-  inspector.context_created(context, 1, name_view, aux_data_view);
+  inspector.context_created(
+    context,
+    1,
+    name_view,
+    StringView::empty(),
+    aux_data_view,
+  );
   let channel = ChannelCounter::new();
   let state = b"{}";
   let state_view = StringView::from(&state[..]);
@@ -7790,7 +7808,13 @@ fn inspector_schedule_pause_on_next_statement() {
   let name = b"";
   let name_view = StringView::from(&name[..]);
   let aux_data = StringView::from(&name[..]);
-  inspector.context_created(context, 1, name_view, aux_data);
+  inspector.context_created(
+    context,
+    1,
+    name_view,
+    StringView::empty(),
+    aux_data,
+  );
 
   // In order for schedule_pause_on_next_statement to work, it seems you need
   // to first enable the debugger.
@@ -7869,7 +7893,13 @@ fn inspector_cancel_pause_on_next_statement() {
   let name = b"";
   let name_view = StringView::from(&name[..]);
   let aux_data = StringView::from(&name[..]);
-  inspector.context_created(context, 1, name_view, aux_data);
+  inspector.context_created(
+    context,
+    1,
+    name_view,
+    StringView::empty(),
+    aux_data,
+  );
 
   let message = String::from(r#"{"id":1,"method":"Debugger.enable"}"#);
   let message = &message.into_bytes()[..];
@@ -7975,7 +8005,13 @@ fn inspector_console_api_message() {
   let name_view = StringView::from(&name[..]);
   let aux_data = b"{\"isDefault\": true}";
   let aux_data_view = StringView::from(&aux_data[..]);
-  inspector.context_created(context, 1, name_view, aux_data_view);
+  inspector.context_created(
+    context,
+    1,
+    name_view,
+    StringView::empty(),
+    aux_data_view,
+  );
 
   let source = r#"
     console.log("one");
@@ -14333,7 +14369,13 @@ fn crdtp_e2e_with_v8_inspector() {
 
   let name = b"test";
   let name_view = StringView::from(&name[..]);
-  inspector.context_created(context, 1, name_view, name_view);
+  inspector.context_created(
+    context,
+    1,
+    name_view,
+    StringView::empty(),
+    name_view,
+  );
 
   let channel = ChannelCounter::new();
   let state_view = StringView::from(&b"{}"[..]);

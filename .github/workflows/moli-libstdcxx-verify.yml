@@ -1,0 +1,102 @@
+name: Moli SDK V8 artifact verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        description: Exact producer workflow run containing all four native artifacts
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: moli-libstdcxx-${{ matrix.target }}
+          path: dist
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify immutable producer identity and unchanged implementation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN: ${{ inputs.artifact_run_id }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, re, subprocess
+          source_run = os.environ['SOURCE_RUN']
+          assert re.fullmatch(r'[0-9]+', source_run), 'Expected an exact numeric producer run ID'
+          endpoint = f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{source_run}"
+          info = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
+          assert info['event'] in ('push', 'workflow_dispatch')
+          assert info['head_repository']['full_name'].lower() == os.environ['GITHUB_REPOSITORY'].lower()
+          assert info['path'] == '.github/workflows/moli-libstdcxx.yml'
+          jobs = json.loads(subprocess.check_output(['gh', 'api', endpoint + '/jobs?per_page=100']))['jobs']
+          target = os.environ['TARGET']
+          assert any(job['name'].endswith(f', {target})') and any(
+              step['name'] == 'Produce on native Debian 12' and step['conclusion'] == 'success'
+              for step in job['steps']) for job in jobs), 'Target producer did not succeed'
+          text = pathlib.Path('dist/provenance.txt').read_text()
+          def field(name):
+              values = re.findall(r'^' + re.escape(name) + r'=(.*)$', text, re.M)
+              assert len(values) == 1, f'Expected one producer field: {name}'
+              return values[0]
+          producer = field('producer_commit')
+          assert re.fullmatch(r'[0-9a-f]{40}', producer)
+          assert producer == info['head_sha']
+          assert field('run_id') == source_run and field('target') == target
+          subprocess.run(['sha256sum', '--check', 'SHA256SUMS'], cwd='dist', check=True)
+          subprocess.run(['git', 'fetch', '--no-tags', '--depth=1', 'origin', producer], check=True)
+          # Only verification inputs may differ. Build scripts, source, gitlinks,
+          # compiler configuration and license inputs remain the producer's tree.
+          subprocess.run(['git', 'diff', '--exit-code', producer, 'HEAD', '--', '.',
+              ':(exclude)tests/**', ':(exclude)tools/moli_libstdcxx/verify.sh',
+              ':(exclude).github/workflows/moli-libstdcxx-verify.yml'], check=True)
+          pathlib.Path('dist/verification-provenance.json').write_text(json.dumps({
+              'producer_commit': producer, 'producer_run': source_run,
+              'verification_commit': os.environ['GITHUB_SHA'], 'target': target,
+              'implementation_tree_unchanged': True,
+          }, indent=2) + '\n')
+          PY
+          git submodule update --init --depth 1 third_party/icu
+      - name: Verify in native target distribution
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euxo pipefail
+          image=debian:12
+          if [[ "$TARGET" == *-musl ]]; then image=alpine:3.23; fi
+          docker pull "$image"
+          docker image inspect "$image" > dist/verification-container-image.json
+          docker run --rm -v "$PWD:/work" -w /work -e TARGET \
+            "$image" sh tools/moli_libstdcxx/verify.sh
+          cd dist
+          sha256sum verification-provenance.json verification-container-image.json >> SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: moli-libstdcxx-verified-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
