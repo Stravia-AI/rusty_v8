@@ -2232,6 +2232,13 @@ fn ninja(gn_out_dir: &Path, maybe_env: Option<NinjaEnv>) -> Command {
       cmd.env(item.0, item.1);
     }
   }
+  if env::var("RUSTY_V8_MOLI_LIBSTDCXX").as_deref() == Ok("1") {
+    // GN supplies per-toolchain flags. Cargo's target and global bindgen
+    // overrides must not turn a GNU host generator into a musl generator.
+    cmd
+      .env_remove("TARGET")
+      .env_remove("BINDGEN_EXTRA_CLANG_ARGS");
+  }
   cmd
 }
 

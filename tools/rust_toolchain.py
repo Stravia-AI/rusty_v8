@@ -49,8 +49,10 @@ if os.environ.get('RUSTY_V8_MOLI_LIBSTDCXX') == '1':
         ('rust-std', 'aarch64-unknown-linux-musl'): '8df1e44bda7342d859d10e77d0da2b86877d63b169d2eaed0e68bd4f2a390018',
         ('rust-std', 'x86_64-unknown-linux-gnu'): 'd24d693348498f241da8d8878b6dbf760e99d61b9949306a74c82f676f8ec59f',
         ('rust-std', 'x86_64-unknown-linux-musl'): '1931e5500bc882a0d3df5fac1d1b80a78a9e9d673b5c6fed210604d45ee1e721',
+        ('rustfmt', 'x86_64-unknown-linux-gnu'): 'f6cb553a03c2d8a326f9d6714faf07096f25a10c49b02a135fe55841bfafb743',
+        ('rustfmt', 'aarch64-unknown-linux-gnu'): '37b179f04aa6c7e50daf52c98444ed5c1ae406674395ace68f1d4a2071e1a964',
     }
-    components = [('rustc', host), ('rust-std', host)]
+    components = [('rustc', host), ('rust-std', host), ('rustfmt', host)]
     if target != host:
         components.append(('rust-std', target))
     inputs = f'nightly={date}\nrevision={revision}\n'

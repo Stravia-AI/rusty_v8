@@ -74,6 +74,7 @@ resource_dir=$(clang -print-resource-dir)
 test "${resource_dir##*/}" = 21
 runtime_dir="$CLANG_BASE_PATH/lib/clang/21/lib/$compiler_host"
 mkdir -p "$runtime_dir"
+ln -s "$resource_dir/include" "$CLANG_BASE_PATH/lib/clang/21/include"
 for runtime_name in builtins profile; do
   source_runtime="$resource_dir/lib/linux/libclang_rt.$runtime_name-$compiler_arch.a"
   staged_runtime="$runtime_dir/libclang_rt.$runtime_name.a"
@@ -99,6 +100,15 @@ export CARGO_BUILD_JOBS=2
 git config --global --add safe.directory /work
 rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --no-self-update
 rustup target add "$TARGET"
+
+# GN's bindgen action needs its CLI, formatter and libclang independently
+# of rustc/std. Build these host tools before applying the musl target flags.
+host_tools=/work/target/moli-host-tools
+cargo install bindgen-cli --version 0.72.1 --locked --target "$compiler_host" --root "$host_tools"
+ln -s /work/third_party/rust-toolchain/bin/rustfmt "$host_tools/bin/rustfmt"
+ln -s /usr/lib/llvm-21/lib "$host_tools/lib"
+"$host_tools/bin/bindgen" --version
+cp "$host_tools/.crates.toml" host-tools-crates.toml
 
 host_version=$(g++ -dumpversion)
 host_machine=$(g++ -dumpmachine)
@@ -134,9 +144,10 @@ else
 fi
 export BINDGEN_EXTRA_CLANG_ARGS="$CXXFLAGS"
 export V8_FROM_SOURCE=1 RUSTY_V8_MOLI_LIBSTDCXX=1
-export GN_ARGS='use_custom_libcxx_for_host=false use_glib=false clang_version="21"'
+export GN_ARGS='use_custom_libcxx_for_host=false use_glib=false clang_version="21" rust_bindgen_root="/work/target/moli-host-tools"'
 git submodule status --recursive > git_submodule_status.txt
 cargo build --locked --release --no-default-features --lib --target "$TARGET"
+sha256sum "$host_tools/bin/bindgen" "$host_tools/bin/rustfmt" > host-tools.sha256
 
 # Same archive and bindings locations used by upstream ci.yml, renamed only
 # at the publication boundary to prevent cross-variant cache collisions.
@@ -148,6 +159,7 @@ cp "target/$TARGET/release/gn_out/src_binding.rs" "dist/$binding"
 cp "target/$TARGET/release/gn_out/args.gn" dist/args.gn
 cp git_submodule_status.txt target-runtime.sha256 target-packages.txt debian-image.json dist/
 cp compiler-packages.txt compiler-runtime.sha256 compiler-runtime-headers.txt dist/
+cp host-tools.sha256 host-tools-crates.toml dist/
 cp -r compiler-notices dist/
 cp third_party/rust-toolchain/.moli-toolchain-inputs dist/rust-toolchain-inputs.txt
 cp third_party/rust-toolchain/share/doc/rust/COPYRIGHT*.html dist/compiler-notices/
@@ -169,8 +181,10 @@ python3 tools/moli_libstdcxx/collect_notices.py \
   printf 'rust_cross_language_thin_lto=false\nllvm_package_origin=https://apt.llvm.org/bookworm/\n'
   rustc -Vv
   third_party/rust-toolchain/bin/rustc -Vv
+  "$host_tools/bin/bindgen" --version
+  "$host_tools/bin/rustfmt" --version
   clang++ --version
   g++ --version
   dpkg-query -W
 } > dist/provenance.txt
-(cd dist && sha256sum "$archive" "$binding" "$notices" args.gn git_submodule_status.txt target-runtime.sha256 target-packages.txt debian-image.json provenance.txt compiler-packages.txt compiler-runtime.sha256 compiler-runtime-headers.txt rust-toolchain-inputs.txt compiler-notices/*.* compiler-notices/rust-licenses/* > SHA256SUMS)
+(cd dist && sha256sum "$archive" "$binding" "$notices" args.gn git_submodule_status.txt target-runtime.sha256 target-packages.txt debian-image.json provenance.txt compiler-packages.txt compiler-runtime.sha256 compiler-runtime-headers.txt rust-toolchain-inputs.txt host-tools.sha256 host-tools-crates.toml compiler-notices/*.* compiler-notices/rust-licenses/* > SHA256SUMS)
