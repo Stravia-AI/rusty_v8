@@ -69,7 +69,7 @@ jobs:
           subprocess.run(['git', 'fetch', '--no-tags', '--depth=1', 'origin', producer], check=True)
           # Only verification inputs may differ. Build scripts, source, gitlinks,
           # compiler configuration and license inputs remain the producer's tree.
-          subprocess.run(['git', 'diff', '--exit-code', producer, 'HEAD', '--', '.',
+          subprocess.run(['git', 'diff', '--exit-code', producer, '--', '.',
               ':(exclude)tests/**', ':(exclude)tools/moli_libstdcxx/verify.sh',
               ':(exclude).github/workflows/moli-libstdcxx-verify.yml'], check=True)
           pathlib.Path('dist/verification-provenance.json').write_text(json.dumps({
