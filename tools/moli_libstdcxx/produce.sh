@@ -11,14 +11,13 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends ca-certificates curl gnupg git python3 g++ make pkg-config xz-utils unzip binutils
 curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm.gpg
-printf '%s\n' 'deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-21 main' > /etc/apt/sources.list.d/llvm.list
+printf '%s\n' 'deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-23 main' > /etc/apt/sources.list.d/llvm.list
 apt-get update
 case "$(dpkg --print-architecture)" in
-  amd64) llvm_package_version='1:21.1.8~++20251221032947+2078da43e25a-1~exp1~20251221153113.67' ;;
-  arm64) llvm_package_version='1:21.1.5~++20251023083151+45afac62e373-1~exp1~20251023083333.51' ;;
+  amd64|arm64) llvm_package_version='1:23.1.2~++20260910044042+069ef0e7cb36-1~exp1~20260910044052.71' ;;
   *) echo 'Unsupported native compiler architecture' >&2; exit 1 ;;
 esac
-llvm_packages=(clang-21 lld-21 llvm-21 libclang-21-dev libclang-rt-21-dev)
+llvm_packages=(clang-23 lld-23 llvm-23 libclang-23-dev libclang-rt-23-dev)
 llvm_inputs=()
 for package in "${llvm_packages[@]}"; do llvm_inputs+=("$package=$llvm_package_version"); done
 # apt checks the downloaded package hashes against its authenticated index.
@@ -26,21 +25,21 @@ for package in "${llvm_packages[@]}"; do llvm_inputs+=("$package=$llvm_package_v
 apt-cache show "${llvm_inputs[@]}" > compiler-packages.txt
 python3 - "$(dpkg --print-architecture)" <<'PY'
 import pathlib, sys
-packages = ('clang-21', 'lld-21', 'llvm-21', 'libclang-21-dev', 'libclang-rt-21-dev')
+packages = ('clang-23', 'lld-23', 'llvm-23', 'libclang-23-dev', 'libclang-rt-23-dev')
 hashes = {
     'amd64': (
-        '43167d4912316e591f4dc122bd8e9cd0c2db95c31edcc47cde97e89a496c2024',
-        '498f0690630be48f0f11e3c62bedc0d646ed2951c10c707e388a322cd9b93a0f',
-        '03072419cb442b707f616e2939c9231b0ecb9c21c01506a69a604de8ce55fc0b',
-        '16a10b6e2019a9789360384888176175c750e646aa5106acdd1e293963139f01',
-        'b092147d5b7a259769b484c8c8edf469714f0715d07040296bd58371e9ad42b4',
+        '37b18b59ae24b157cbb7ab6e75d3e9bee869e0e1b09f7d5cdc52fcff8a8c7a0d',
+        'b211b579c71d54beb0acb985477da256b8bda36cb6245ff1e5fe98fb6f9300fe',
+        'fd6e846d652417f7010c4c4bfa62814f5cf8165ffbd1e2d2650b4e19e4706e57',
+        '3dbf60a9aec6bdf8cbaa4750e9d8d4d9a2ef26dd532a0df6c9bc26413c335392',
+        '3043f1ccdadcb8d533f878ffe3add7b2ae68d150bf0c5b5f21d706d3472608e4',
     ),
     'arm64': (
-        'a23e766cc1af436537c16c54a443c21b02bdfb21cb561cef959e1a367314a103',
-        '031e597fb48cf9adbe75f8509688fd467f5a9ba4a3cd6385acdd564296c2177b',
-        'b70bc578ebb0d50f74fd515c1768fadd232ffd8dea77aa342fa0b58a226fa2f9',
-        '0788cd0758a0b1d5ab958d3e68a1ac004df3ece74b46acd811e2c13528d0925a',
-        'c129be87e286775787489fa9f3aec5d2bdaf104609e9b128f8225cb1ab8679ff',
+        '51ea86c1ee833ff8df683f8fe19aeecc99b3a7a778c55b5185a1a2facc9edde0',
+        '8f1e5d02d8811399340f5e6d5ef091247e41d6a77d4684ee61ba94fefbc1e1ae',
+        '80713fd373370646ea471fdf01315ee14c68927f44283870a2ba3dfaf02919ab',
+        'd3d1220ecb44d465466d3a598181d54ed55c74501549010280f7372531725c99',
+        '5485aa70c55a6b51d0e0df049ba1b1d4d6e651f5e01e5d93edd082cf71514195',
     ),
 }
 expected = dict(zip(packages, hashes[sys.argv[1]]))
@@ -55,15 +54,15 @@ PY
 apt-get install -y --no-install-recommends "${llvm_inputs[@]}"
 curl -fsSL https://sh.rustup.rs -o /tmp/rustup.sh
 sh /tmp/rustup.sh -y --profile minimal --default-host "${TARGET%-*}-gnu" --default-toolchain none
-export PATH="/root/.cargo/bin:/usr/lib/llvm-21/bin:$PATH"
-export LIBCLANG_PATH=/usr/lib/llvm-21/lib
-export RUSTY_V8_BINDGEN_RESOURCE_DIR=$(/usr/lib/llvm-21/bin/clang -print-resource-dir)
+export PATH="/root/.cargo/bin:/usr/lib/llvm-23/bin:$PATH"
+export LIBCLANG_PATH=/usr/lib/llvm-23/lib
+export RUSTY_V8_BINDGEN_RESOURCE_DIR=$(/usr/lib/llvm-23/bin/clang -print-resource-dir)
 # Native distro compilers, never Chromium's x64-only Linux executables.
 # GN accepts the actual Clang major version. Its runtime config expects a
 # per-triple archive name; stage the genuine archives without changing bytes.
 export CLANG_BASE_PATH=/work/target/moli-clang
 mkdir -p "$CLANG_BASE_PATH"
-ln -s /usr/lib/llvm-21/bin "$CLANG_BASE_PATH/bin"
+ln -s /usr/lib/llvm-23/bin "$CLANG_BASE_PATH/bin"
 compiler_arch=${TARGET%%-*}
 compiler_host="$compiler_arch-unknown-linux-gnu"
 case "$(clang -dumpmachine)" in
@@ -71,10 +70,10 @@ case "$(clang -dumpmachine)" in
   *) echo 'Clang host triple does not match the native SDK target' >&2; exit 1 ;;
 esac
 resource_dir=$(clang -print-resource-dir)
-test "${resource_dir##*/}" = 21
-runtime_dir="$CLANG_BASE_PATH/lib/clang/21/lib/$compiler_host"
+test "${resource_dir##*/}" = 23
+runtime_dir="$CLANG_BASE_PATH/lib/clang/23/lib/$compiler_host"
 mkdir -p "$runtime_dir"
-ln -s "$resource_dir/include" "$CLANG_BASE_PATH/lib/clang/21/include"
+ln -s "$resource_dir/include" "$CLANG_BASE_PATH/lib/clang/23/include"
 for runtime_name in builtins profile; do
   source_runtime="$resource_dir/lib/linux/libclang_rt.$runtime_name-$compiler_arch.a"
   staged_runtime="$runtime_dir/libclang_rt.$runtime_name.a"
@@ -106,7 +105,7 @@ rustup target add "$TARGET"
 host_tools=/work/target/moli-host-tools
 cargo install bindgen-cli --version 0.72.1 --locked --target "$compiler_host" --root "$host_tools"
 ln -s /work/third_party/rust-toolchain/bin/rustfmt "$host_tools/bin/rustfmt"
-ln -s /usr/lib/llvm-21/lib "$host_tools/lib"
+ln -s /usr/lib/llvm-23/lib "$host_tools/lib"
 "$host_tools/bin/bindgen" --version
 cp "$host_tools/.crates.toml" host-tools-crates.toml
 
@@ -144,7 +143,7 @@ else
 fi
 export BINDGEN_EXTRA_CLANG_ARGS="$CXXFLAGS"
 export V8_FROM_SOURCE=1 RUSTY_V8_MOLI_LIBSTDCXX=1
-export GN_ARGS='use_custom_libcxx_for_host=false use_glib=false clang_version="21" rust_bindgen_root="/work/target/moli-host-tools"'
+export GN_ARGS='use_custom_libcxx_for_host=false use_glib=false clang_version="23" rust_bindgen_root="/work/target/moli-host-tools"'
 git submodule status --recursive > git_submodule_status.txt
 cargo build --locked --release --no-default-features --lib --target "$TARGET"
 sha256sum "$host_tools/bin/bindgen" "$host_tools/bin/rustfmt" > host-tools.sha256
