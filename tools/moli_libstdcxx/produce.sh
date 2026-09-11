@@ -134,13 +134,18 @@ if [[ "$TARGET" == *-musl ]]; then
   test "${#runtime[@]}" -eq 1
   test -f "${runtime[0]}"
   sha256sum "${runtime[0]}" > target-runtime.sha256
+  atomic_runtime=/work/target-sysroot/usr/lib/libatomic.a
   export CXXFLAGS="--sysroot=$RUSTY_V8_MUSL_SYSROOT $MOLI_TARGET_CXXFLAGS"
   export CFLAGS="--sysroot=$RUSTY_V8_MUSL_SYSROOT"
   cp target-sysroot/moli-apk-packages.txt target-packages.txt
 else
   sha256sum "$(g++ -print-file-name=libstdc++.a)" > target-runtime.sha256
+  atomic_runtime=$(g++ -print-file-name=libatomic.a)
   dpkg-query -W > target-packages.txt
 fi
+test -f "$atomic_runtime"
+sha256sum "$atomic_runtime" > target-atomic.sha256
+export RUSTFLAGS="${RUSTFLAGS:-} -L native=$(dirname "$atomic_runtime")"
 export BINDGEN_EXTRA_CLANG_ARGS="$CXXFLAGS"
 export V8_FROM_SOURCE=1 RUSTY_V8_MOLI_LIBSTDCXX=1
 export GN_ARGS='use_custom_libcxx_for_host=false use_glib=false clang_version="23" rust_bindgen_root="/work/target/moli-host-tools"'
@@ -156,7 +161,7 @@ binding="src_binding_moli_libstdcxx_release_${TARGET}.rs"
 gzip -n -c "target/$TARGET/release/gn_out/obj/librusty_v8.a" > "dist/$archive"
 cp "target/$TARGET/release/gn_out/src_binding.rs" "dist/$binding"
 cp "target/$TARGET/release/gn_out/args.gn" dist/args.gn
-cp git_submodule_status.txt target-runtime.sha256 target-packages.txt debian-image.json dist/
+cp git_submodule_status.txt target-runtime.sha256 target-atomic.sha256 target-packages.txt debian-image.json dist/
 cp compiler-packages.txt compiler-runtime.sha256 compiler-runtime-headers.txt dist/
 cp host-tools.sha256 host-tools-crates.toml dist/
 cp -r compiler-notices dist/
@@ -168,6 +173,9 @@ notices="moli-v8-native-notices-${TARGET}.tar.gz"
 notice_inputs=()
 for package in "${llvm_packages[@]}"; do
   notice_inputs+=(--extra "/usr/share/doc/$package/copyright")
+done
+for license in tools/moli_libstdcxx/licenses/*; do
+  notice_inputs+=(--extra "$PWD/$license")
 done
 python3 tools/moli_libstdcxx/collect_notices.py \
   --output "dist/$notices" --rust-sysroot /work/third_party/rust-toolchain \
@@ -186,4 +194,4 @@ python3 tools/moli_libstdcxx/collect_notices.py \
   g++ --version
   dpkg-query -W
 } > dist/provenance.txt
-(cd dist && sha256sum "$archive" "$binding" "$notices" args.gn git_submodule_status.txt target-runtime.sha256 target-packages.txt debian-image.json provenance.txt compiler-packages.txt compiler-runtime.sha256 compiler-runtime-headers.txt rust-toolchain-inputs.txt host-tools.sha256 host-tools-crates.toml compiler-notices/*.* compiler-notices/rust-licenses/* > SHA256SUMS)
+(cd dist && sha256sum "$archive" "$binding" "$notices" args.gn git_submodule_status.txt target-runtime.sha256 target-atomic.sha256 target-packages.txt debian-image.json provenance.txt compiler-packages.txt compiler-runtime.sha256 compiler-runtime-headers.txt rust-toolchain-inputs.txt host-tools.sha256 host-tools-crates.toml compiler-notices/*.* compiler-notices/rust-licenses/* > SHA256SUMS)

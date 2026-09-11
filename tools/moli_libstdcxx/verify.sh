@@ -19,17 +19,22 @@ export CARGO_BUILD_JOBS=2
 mkdir -p /tmp/v8-consumer
 cp Cargo.toml Cargo.lock build.rs rust-toolchain.toml /tmp/v8-consumer/
 cp -a src examples benches tests gen moli_v8_include /tmp/v8-consumer/
+mkdir -p /tmp/v8-consumer/third_party/icu/common
+cp third_party/icu/common/icudtl.dat /tmp/v8-consumer/third_party/icu/common/
 cd /tmp/v8-consumer
 rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --no-self-update
 rustup target add "$TARGET"
 export RUSTY_V8_ARCHIVE="/work/dist/librusty_v8_moli_libstdcxx_release_${TARGET}.a.gz"
 export RUSTY_V8_SRC_BINDING_PATH="/work/dist/src_binding_moli_libstdcxx_release_${TARGET}.rs"
 export RUSTY_V8_ARCHIVE_SHA256=$(sha256sum "$RUSTY_V8_ARCHIVE" | cut -d ' ' -f 1)
+export RUSTY_V8_MOLI_LIBSTDCXX=1
 export CXXSTDLIB=''
 expected_runtime=$(cut -d ' ' -f 1 /work/dist/target-runtime.sha256)
 actual_runtime=$(sha256sum "$(g++ -print-file-name=libstdc++.a)" | cut -d ' ' -f 1)
 test "$actual_runtime" = "$expected_runtime"
-export RUSTFLAGS="-L native=$(dirname "$(g++ -print-file-name=libstdc++.a)") -L native=$(dirname "$(g++ -print-file-name=libgcc_eh.a)") -l static=stdc++ -l static=gcc_eh"
+atomic_runtime=$(g++ -print-file-name=libatomic.a)
+test "$(sha256sum "$atomic_runtime" | cut -d ' ' -f 1)" = "$(cut -d ' ' -f 1 /work/dist/target-atomic.sha256)"
+export RUSTFLAGS="-L native=$(dirname "$(g++ -print-file-name=libstdc++.a)") -L native=$(dirname "$(g++ -print-file-name=libgcc_eh.a)") -L native=$(dirname "$atomic_runtime") -l static=stdc++ -l static=gcc_eh"
 cargo build --locked --release --no-default-features --target "$TARGET" --example hello_world
 binary="target/$TARGET/release/examples/hello_world"
 "$binary" > /work/dist/native-hello-world.txt
@@ -41,14 +46,18 @@ for scenario in \
 do
   cargo test --locked --release --no-default-features --target "$TARGET" \
     --test test_api "$scenario" -- --exact \
-    > "/work/dist/native-test-$scenario.txt" 2>&1
+    > "/work/dist/native-test-$scenario.txt" 2>&1 || {
+      status=$?
+      cat "/work/dist/native-test-$scenario.txt"
+      exit "$status"
+    }
 done
 readelf -d "$binary" > /work/dist/native-dynamic-section.txt
 readelf --version-info "$binary" > /work/dist/native-symbol-versions.txt
 # readelf output remains evidence even when a musl executable is fully static.
 needed=$(sed -n '/NEEDED/p' /work/dist/native-dynamic-section.txt)
 case "$needed" in
-  *libstdc++*|*libc++*|*libgcc_s*)
+  *libstdc++*|*libc++*|*libgcc_s*|*libatomic*)
     echo 'Native smoke binary has a dynamic C++ runtime dependency' >&2
     exit 1 ;;
 esac

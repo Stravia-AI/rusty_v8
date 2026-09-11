@@ -1900,6 +1900,13 @@ fn print_link_flags() {
   let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
   let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap();
 
+  if env_bool("RUSTY_V8_MOLI_LIBSTDCXX") {
+    assert_eq!(target_os, "linux");
+    // Wide C++ atomics can require compiler runtime calls, including the
+    // Wasm code-pointer table on musl. Keep that runtime static as well.
+    println!("cargo:rustc-link-lib=static=atomic");
+  }
+
   if target_os == "windows" {
     println!("cargo:rustc-link-lib=dylib=winmm");
     println!("cargo:rustc-link-lib=dylib=dbghelp");
@@ -2238,7 +2245,7 @@ fn ninja(gn_out_dir: &Path, maybe_env: Option<NinjaEnv>) -> Command {
       cmd.env(item.0, item.1);
     }
   }
-  if env::var("RUSTY_V8_MOLI_LIBSTDCXX").as_deref() == Ok("1") {
+  if env_bool("RUSTY_V8_MOLI_LIBSTDCXX") {
     // GN supplies per-toolchain flags. Cargo's target and global bindgen
     // overrides must not turn a GNU host generator into a musl generator.
     cmd
