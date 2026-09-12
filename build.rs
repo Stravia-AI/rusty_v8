@@ -442,6 +442,7 @@ fn build_moli_v8_ext(sources: &[PathBuf]) {
     build.flag("/Zc:__cplusplus");
   }
   if env_bool("V8_FROM_SOURCE") {
+    build.define("MOLI_V8_FROM_SOURCE", None);
     // Full-source WASM bridges include V8 internals and generated Torque
     // headers, so inherit the native binding target's feature definitions.
     let gn_out = build_dir().join("gn_out");

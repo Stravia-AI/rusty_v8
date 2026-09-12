@@ -5,8 +5,7 @@
 #include "support.h"
 #include "v8.h"
 
-#if __has_include("v8/src/api/api-inl.h") && \
-    __has_include("v8/src/wasm/wasm-engine.h")
+#if defined(MOLI_V8_FROM_SOURCE)
 #define MOLI_HAS_V8_INTERNAL_WASM_COMPILE 1
 #include "v8/src/api/api-inl.h"
 #include "v8/src/base/vector.h"
@@ -130,8 +129,8 @@ v8::MaybeLocal<v8::WasmModuleObject> CompileWithOptions(
 #if MOLI_HAS_V8_INTERNAL_WASM_COMPILE
 #if V8_ENABLE_WEBASSEMBLY
   // Source builds can use the same internal path as V8's public API and pass
-  // compile-time imports directly. Prebuilt rusty_v8 only ships public headers,
-  // so that configuration falls back to the public constructor path below.
+  // compile-time imports directly. Prebuilt consumption uses the public
+  // constructor even when Cargo has checked out the complete V8 source tree.
   v8::base::OwnedVector<const uint8_t> bytes =
       v8::base::OwnedCopyOf(wire_bytes);
   v8::internal::Isolate* isolate =
