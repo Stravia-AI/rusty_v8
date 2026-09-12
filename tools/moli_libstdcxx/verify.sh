@@ -67,4 +67,20 @@ case "$needed" in
     exit 1 ;;
 esac
 cd /work/dist
-sha256sum native-hello-world.txt native-dynamic-section.txt native-symbol-versions.txt native-compiler-runtime.sha256 native-test-*.txt >> SHA256SUMS
+python3 - <<'PY'
+import pathlib
+import subprocess
+
+# A successful producer already has report hashes. Replace only the reports
+# generated above; keep immutable producer input hashes for the final check.
+reports = ['native-hello-world.txt', 'native-dynamic-section.txt',
+           'native-symbol-versions.txt', 'native-compiler-runtime.sha256']
+reports.extend(str(path) for path in sorted(pathlib.Path('.').glob('native-test-*.txt')))
+updated = subprocess.check_output(['sha256sum', *reports], text=True).splitlines()
+names = {line.split(maxsplit=1)[1] for line in updated}
+manifest = pathlib.Path('SHA256SUMS')
+retained = [line for line in manifest.read_text().splitlines()
+            if line.split(maxsplit=1)[1] not in names]
+manifest.write_text('\n'.join([*retained, *updated]) + '\n', newline='\n')
+subprocess.run(['sha256sum', '--check', 'SHA256SUMS'], check=True)
+PY
