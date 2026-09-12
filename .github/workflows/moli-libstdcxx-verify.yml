@@ -1,11 +1,17 @@
 name: Moli SDK V8 artifact verification
 
 on:
+  push:
+    branches: [sdk-native/v152.2.0-libstdcxx-1]
+    paths:
+      - tests/**
+      - tools/moli_libstdcxx/verify.sh
+      - .github/workflows/moli-libstdcxx-verify.yml
   workflow_dispatch:
     inputs:
       artifact_run_id:
-        description: Exact producer workflow run containing all four native artifacts
-        required: true
+        description: Exact producer workflow run; blank uses the pinned producer
+        required: false
         type: string
 
 permissions:
@@ -14,6 +20,8 @@ permissions:
 
 jobs:
   verify:
+    env:
+      SOURCE_RUN: ${{ inputs.artifact_run_id || '34641194894' }}
     strategy:
       fail-fast: false
       matrix:
@@ -34,12 +42,11 @@ jobs:
         with:
           name: moli-libstdcxx-${{ matrix.target }}
           path: dist
-          run-id: ${{ inputs.artifact_run_id }}
+          run-id: ${{ env.SOURCE_RUN }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Verify immutable producer identity and unchanged implementation
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SOURCE_RUN: ${{ inputs.artifact_run_id }}
           TARGET: ${{ matrix.target }}
         run: |
           python3 - <<'PY'

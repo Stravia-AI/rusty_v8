@@ -34,7 +34,12 @@ actual_runtime=$(sha256sum "$(g++ -print-file-name=libstdc++.a)" | cut -d ' ' -f
 test "$actual_runtime" = "$expected_runtime"
 atomic_runtime=$(g++ -print-file-name=libatomic.a)
 test "$(sha256sum "$atomic_runtime" | cut -d ' ' -f 1)" = "$(cut -d ' ' -f 1 /work/dist/target-atomic.sha256)"
-export RUSTFLAGS="-L native=$(dirname "$(g++ -print-file-name=libstdc++.a)") -L native=$(dirname "$(g++ -print-file-name=libgcc_eh.a)") -L native=$(dirname "$atomic_runtime") -l static=stdc++ -l static=gcc_eh"
+# Rust's compiler builtins do not provide every C++ helper: ARM JIT code
+# requires the target GCC runtime's __clear_cache implementation.
+compiler_runtime=$(g++ -print-file-name=libgcc.a)
+test -f "$compiler_runtime"
+sha256sum "$compiler_runtime" > /work/dist/native-compiler-runtime.sha256
+export RUSTFLAGS="-L native=$(dirname "$(g++ -print-file-name=libstdc++.a)") -L native=$(dirname "$(g++ -print-file-name=libgcc_eh.a)") -L native=$(dirname "$atomic_runtime") -l static=stdc++ -l static=gcc_eh -l static=gcc"
 cargo build --locked --release --no-default-features --target "$TARGET" --example hello_world
 binary="target/$TARGET/release/examples/hello_world"
 "$binary" > /work/dist/native-hello-world.txt
@@ -62,4 +67,4 @@ case "$needed" in
     exit 1 ;;
 esac
 cd /work/dist
-sha256sum native-hello-world.txt native-dynamic-section.txt native-symbol-versions.txt native-test-*.txt >> SHA256SUMS
+sha256sum native-hello-world.txt native-dynamic-section.txt native-symbol-versions.txt native-compiler-runtime.sha256 native-test-*.txt >> SHA256SUMS
