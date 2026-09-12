@@ -82,5 +82,5 @@ manifest = pathlib.Path('SHA256SUMS')
 retained = [line for line in manifest.read_text().splitlines()
             if line.split(maxsplit=1)[1] not in names]
 manifest.write_text('\n'.join([*retained, *updated]) + '\n', newline='\n')
-subprocess.run(['sha256sum', '--check', 'SHA256SUMS'], check=True)
+subprocess.run(['sha256sum', '-c', 'SHA256SUMS'], check=True)
 PY
