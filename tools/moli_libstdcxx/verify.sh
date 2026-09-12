@@ -5,11 +5,11 @@ set -eu
 # and the native musl Rust toolchain. Rebuild the public-header extensions as
 # an actual prebuilt-archive consumer, not against the producer's V8 internals.
 if [ -f /etc/alpine-release ]; then
-  apk add --no-cache ca-certificates curl g++ linux-headers libstdc++-dev binutils bash
+  apk add --no-cache ca-certificates curl g++ linux-headers libstdc++-dev binutils bash python3
 else
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
-  apt-get install -y --no-install-recommends ca-certificates curl g++ binutils
+  apt-get install -y --no-install-recommends ca-certificates curl g++ binutils python3
 fi
 curl -fsSL https://sh.rustup.rs -o /tmp/rustup.sh
 sh /tmp/rustup.sh -y --profile minimal --default-host "$TARGET" --default-toolchain none
